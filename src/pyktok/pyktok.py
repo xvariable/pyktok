@@ -297,3 +297,54 @@ def save_hashtag_video_urls(hashtag,
     count = len(finalurls.index)
     finalurls.to_csv(urls_file, index=False)
     print("Dropped", str(old_count - count), "duplicate urls. Total number of urls in file:", count)
+                      
+def save_2hashtag_video_urls(hashtag,
+                            hashtag2,
+                            urls_file=None,
+                            cursor_resume=0,
+                            max_videos=np.inf,
+                            sleep=4):
+    if urls_file == None:
+        urls_file = '#' + hashtag + '_' + hashtag2 + '_tiktok.csv'
+    cursor = cursor_resume
+    tagurl = "https://www.tiktok.com/tag/" + hashtag + "%20" + hashtag2
+    tagjson = get_tiktok_json(tagurl)
+    al_ios = tagjson['SharingMeta']['value']['al:ios:url']
+    tag_id = re.findall('(?<=/detail/)(.+?)(?=\?|$)',al_ios)[0]
+    headers["referer"] = tagurl
+    cookies = browser_cookie3.load()
+    while cursor < max_videos:
+        params = {'challengeID': tag_id,
+                  'count': '20',
+                  'cursor': str(cursor),
+                  'aid': '1988'}
+        try:
+            response = requests.get('https://www.tiktok.com/api/challenge/item_list/',
+                                    headers=headers,
+                                    params=params,
+                                    cookies=cookies)
+            data = response.json()
+            urllist = []
+            for video in data['itemList']:
+                urllist.append('https://tiktok.com/@' + video['author']['uniqueId'] + '/video/' + video['id'])
+            if os.path.exists(urls_file):
+                pd.DataFrame(urllist).to_csv(urls_file,
+                                             mode='a',
+                                             header=False,
+                                             index=False)
+            else:
+               pd.DataFrame(urllist).to_csv(urls_file,index=False,header=['url'])
+            old_cursor = cursor
+            cursor = cursor + len(data['itemList'])
+            print("Video urls", old_cursor, "through", cursor, "downloaded (max " + str(max_videos) + ")")
+            if data["hasMore"] != 1:
+                break
+            time.sleep(random.randint(1, sleep))
+        except Exception as e:
+            print(e)
+    finalurls = pd.read_csv(urls_file)
+    old_count = len(finalurls.index)
+    finalurls.drop_duplicates(subset=None, inplace=True)
+    count = len(finalurls.index)
+    finalurls.to_csv(urls_file, index=False)
+    print("Dropped", str(old_count - count), "duplicate urls. Total number of urls in file:", count)
